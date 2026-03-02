@@ -1,5 +1,6 @@
 package com.ud.riddle
 
+import android.R
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -20,7 +21,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -33,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import com.ud.riddle.models.enums.GameStateEnum
 import com.ud.riddle.models.enums.Player
 import com.ud.riddle.ui.theme.RiddleAppTheme
+import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -57,9 +61,12 @@ fun GameScreen(padding: PaddingValues){
     val players = remember { mutableStateListOf<Player>() }
 
     val secret = "cactus"
-    var impostorPosition: Int? = 0
+    var word_clue by remember { mutableStateOf<String>("")}
+    var impostorPosition by remember { mutableIntStateOf(0) }
     var positionClue by remember { mutableStateOf(0) }
     var currentPlayer: Player?
+    var impostorName by remember { mutableStateOf<String?>("") }
+    var showImpostor by remember { mutableStateOf(false) }
 
     when(gameState){
 
@@ -108,11 +115,13 @@ fun GameScreen(padding: PaddingValues){
                         Spacer(modifier = Modifier.height(8.dp))
 
                         Button(onClick = {
-                            if (players.isNotEmpty()) {
+                            if (players.isNotEmpty() && players.size>=3) {
                                 players.shuffle()
                                 impostorPosition = players.indices.random()
                                 players[impostorPosition].isImpostor = true
                                 gameState = GameStateEnum.SHOWING_CLUE
+                            }else{
+                                Toast.makeText(context, "there are few players", Toast.LENGTH_LONG).show()
                             }
                         }) {
                             Text("Start")
@@ -142,10 +151,10 @@ fun GameScreen(padding: PaddingValues){
                 Button(onClick = {
                     val isImpostor =  currentPlayer?.isImpostor
 
-                    if (isImpostor == true){
-                        Toast.makeText(context, "No tienes pista", Toast.LENGTH_LONG).show()
+                    word_clue = if (isImpostor == true) {
+                        "TU ERES EL IMMPORTOR, tu pista es: no pista"
                     } else {
-                        Toast.makeText(context, "Pista: $secret", Toast.LENGTH_LONG).show()
+                        "la palabra es: $secret"
                     }
                 }) { Text("Show Clue") }
 
@@ -153,40 +162,95 @@ fun GameScreen(padding: PaddingValues){
                 Button(onClick = {
                     currentPlayer = players[positionClue]
                     positionClue++
-
+                    word_clue=""
                     if (positionClue == players.size){
                         positionClue = 0
                         gameState = GameStateEnum.IN_TURNS
                     }
 
                 }) { Text("Next") }
-
+                word_clue?.let { word_clue ->
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = word_clue
+                    )
+                }
             }
 
         }
         GameStateEnum.IN_TURNS -> {
-            currentPlayer = players[positionClue]
-
-            Text("Take phone ${currentPlayer.name}")
-
-            Button(onClick = {
+            Column(modifier = Modifier.fillMaxSize().padding(padding),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally) {
                 currentPlayer = players[positionClue]
-                positionClue++
 
-                if (positionClue == players.size){
-                    gameState = GameStateEnum.END
-                }
+                Text("Take phone ${currentPlayer.name}")
 
-            }) { Text("Next") }
+                Button(onClick = {
+                    currentPlayer = players[positionClue]
+                    positionClue++
 
+                    if (positionClue == players.size) {
+                        gameState = GameStateEnum.END
+                    }
+
+                }) { Text("Next") }
+            }
         }
         GameStateEnum.END -> {
-            Button(onClick = {
-                val nameImpostor = impostorPosition?.let { players[it] }?.name
-                Toast.makeText(context, "Impostor $nameImpostor", Toast.LENGTH_LONG).show()
+            Column(modifier = Modifier.fillMaxSize().padding(padding),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally) {
+                Button(onClick = {
 
-            }) { Text("Show impostor") }
+                    impostorName = impostorPosition?.let { players[it] }?.name
+                    showImpostor=true
+
+                    //Toast.makeText(context, "Impostor $nameImpostor", Toast.LENGTH_LONG).show()
+
+                }) { Text("Show impostor") }
+                Button(onClick = {
+                    positionClue = 0
+                    gameState = GameStateEnum.IN_TURNS
+                }) { Text("New round to say the word") }
+                if(showImpostor && impostorName!=null){
+                    impostorName?.let { name ->
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "El impostor es: $name"
+                        )
+                    }
+                    LaunchedEffect(showImpostor) {
+                        delay(5000L)
+                        showImpostor = false
+                        gameState = GameStateEnum.NEWGAME
+                    }
+                }
+
+
+            }
         }
-
+        GameStateEnum.NEWGAME -> {
+            Column(modifier = Modifier.fillMaxSize().padding(padding),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally) {
+                Button(onClick = {
+                    impostorName=null
+                    positionClue = 0
+                    for(i in 0..(players.size-1)) {
+                        players[i].isImpostor = false
+                    }
+                    players.shuffle()
+                    impostorPosition = players.indices.random()
+                    players[impostorPosition].isImpostor = true
+                    gameState = GameStateEnum.SHOWING_CLUE
+                }) { Text("New game whit the same players") }
+                Button(onClick = {
+                    players.clear()
+                    positionClue=0
+                    gameState = GameStateEnum.CREATING_PLAYERS
+                }) { Text("New game whit new players") }
+            }
+        }
     }
 }
